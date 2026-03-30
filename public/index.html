@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BG Remover - Remove Image Backgrounds</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: #6366f1; }
+    .subtitle { color: #64748b; margin-bottom: 40px; font-size: 16px; }
+    .upload-area {
+      width: 100%;
+      max-width: 560px;
+      border: 2px dashed #cbd5e1;
+      border-radius: 16px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: white;
+    }
+    .upload-area:hover, .upload-area.dragover {
+      border-color: #6366f1;
+      background: #eef2ff;
+    }
+    .upload-icon { font-size: 48px; margin-bottom: 16px; }
+    .upload-text { font-size: 18px; font-weight: 500; margin-bottom: 8px; }
+    .upload-hint { font-size: 14px; color: #94a3b8; }
+    .upload-area input { display: none; }
+    .preview-area {
+      display: none;
+      width: 100%;
+      max-width: 560px;
+      margin-top: 24px;
+    }
+    .preview-area.show { display: block; }
+    .preview-row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+    .preview-card {
+      flex: 1;
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .preview-card h3 { font-size: 14px; color: #64748b; margin-bottom: 12px; font-weight: 500; }
+    .preview-card img {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 8px;
+      background: repeating-conic-gradient(#ccc 0% 25%, white 0% 50%) 50% / 16px 16px;
+    }
+    .checkered-bg { background: repeating-conic-gradient(#e5e5e5 0% 25%, white 0% 50%) 50% / 10px 10px; }
+    .btn {
+      display: inline-block;
+      width: 100%;
+      max-width: 560px;
+      margin-top: 20px;
+      padding: 14px 24px;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #4f46e5; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    .status {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #64748b;
+      min-height: 24px;
+    }
+    .status.error { color: #ef4444; }
+    .status.loading { color: #6366f1; }
+    .footer {
+      margin-top: auto;
+      padding-top: 48px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <h1>🪄 BG Remover</h1>
+  <p class="subtitle">Remove image backgrounds in seconds — no signup required</p>
+
+  <div class="upload-area" id="uploadArea">
+    <div class="upload-icon">📤</div>
+    <div class="upload-text">Drop your image here or click to upload</div>
+    <div class="upload-hint">JPG, PNG, WebP — max 10MB</div>
+    <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" />
+  </div>
+
+  <div class="preview-area" id="previewArea">
+    <div class="preview-row">
+      <div class="preview-card">
+        <h3>Original</h3>
+        <img id="originalImg" />
+      </div>
+      <div class="preview-card">
+        <h3>Result</h3>
+        <div class="checkered-bg" style="border-radius:8px; overflow:hidden;">
+          <img id="resultImg" style="background:transparent;" />
+        </div>
+      </div>
+    </div>
+    <button class="btn" id="downloadBtn" disabled>⬇️ Download</button>
+  </div>
+
+  <p class="status" id="status"></p>
+  <p class="footer">Powered by remove.bg · Built on Cloudflare</p>
+
+  <script>
+    const API_URL = 'https://api.example.com/removebg'; // Replace with your Worker URL
+
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const previewArea = document.getElementById('previewArea');
+    const originalImg = document.getElementById('originalImg');
+    const resultImg = document.getElementById('resultImg');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const status = document.getElementById('status');
+
+    let currentFile = null;
+    let resultBlob = null;
+
+    // Drag & drop
+    uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+    uploadArea.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      handleFile(e.dataTransfer.files[0]);
+    });
+    uploadArea.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+
+    function handleFile(file) {
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { setStatus('❌ File too large (max 10MB)', 'error'); return; }
+      currentFile = file;
+      originalImg.src = URL.createObjectURL(file);
+      previewArea.classList.add('show');
+      resultImg.src = '';
+      downloadBtn.disabled = true;
+      setStatus('⏳ Uploading and processing... (up to 30s)', 'loading');
+      processImage(file);
+    }
+
+    async function processImage(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch(API_URL, { method: 'POST', body: formData });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+        resultBlob = await res.blob();
+        resultImg.src = URL.createObjectURL(resultBlob);
+        downloadBtn.disabled = false;
+        setStatus('✅ Done! Click download to save your image.', '');
+      } catch (e) {
+        setStatus('❌ ' + e.message, 'error');
+      }
+    }
+
+    downloadBtn.addEventListener('click', () => {
+      if (!resultBlob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(resultBlob);
+      a.download = currentFile.name.replace(/\.[^.]+$/, '-nobg.png');
+      a.click();
+    });
+
+    function setStatus(msg, cls) {
+      status.className = 'status ' + cls;
+      status.textContent = msg;
+    }
+  </script>
+</body>
+</html>
