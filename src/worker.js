@@ -217,8 +217,27 @@ const INDEX_HTML = `<!DOCTYPE html>
         document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
         selectedColor = e.target.dataset.color;
+        updatePreviewWithBackground();
       }
     };
+    
+    function updatePreviewWithBackground() {
+      if (!resultBlob) return;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        if (selectedColor !== 'transparent') {
+          ctx.fillStyle = selectedColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        ctx.drawImage(img, 0, 0);
+        previewImg.src = canvas.toDataURL('image/png');
+      };
+      img.src = URL.createObjectURL(resultBlob);
+    }
     document.getElementById('downloadBtn').onclick = () => {
       if (!resultBlob) return;
       const canvas = document.createElement('canvas');
