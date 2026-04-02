@@ -2,8 +2,8 @@
  * BG Remover - Cloudflare Worker with Static Assets
  */
 
-const REMOVE_BG_API_KEY = REMOVE_BG_API_KEY;
 const REMOVE_BG_API_URL = 'https://api.remove.bg/v1.0/removebg';
+const REMOVE_BG_API_KEY = 'HAF1wcMic4gaK8GLmxeSMkLm';
 
 // Static HTML
 const INDEX_HTML = `<!DOCTYPE html>
